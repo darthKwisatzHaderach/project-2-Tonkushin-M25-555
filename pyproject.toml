@@ -6,7 +6,7 @@ authors = [
     { name = "Dmitriy Tonkushin", email = "dmitriy.tonkushin@yandex.ru" }
 ]
 readme = "README.md"
-requires-python = ">=3.9.6"
+requires-python = ">=3.13.5"
 dependencies = [
 ]
 
@@ -24,7 +24,7 @@ project = "src.primitive_db.main:main"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py313"
 exclude = ["venv", ".venv", "dist", "__pycache__"]
 
 [tool.ruff.lint]
