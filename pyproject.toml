@@ -20,7 +20,7 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-project = "src.primitive_db.main:main"
+project = "primitive_db.main:main"
 
 [tool.ruff]
 line-length = 88
