@@ -3,14 +3,26 @@ def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
     if table_name in metadata:
         raise ValueError(f"Таблица {table_name!r} уже существует")
 
-    normalized = ["ID:int"]
+    normalized = []
+    has_id = False
+    id_column = None
+
     for column in columns:
         name, _, type_name = column.partition(":")
         if not type_name:
             raise ValueError(f"Колонка {column!r} без типа")
         if type_name not in {"int", "str", "bool"}:
             raise ValueError(f"Тип {type_name!r} не поддерживается")
-        normalized.append(f"{name}:{type_name}")
+        if name.upper() == "ID":
+            has_id = True
+            id_column = f"{name}:{type_name}"
+        else:
+            normalized.append(f"{name}:{type_name}")
+
+    if has_id:
+        normalized.insert(0, id_column)
+    else:
+        normalized.insert(0, "ID:int")
 
     metadata = metadata.copy()
     metadata[table_name] = normalized
