@@ -17,11 +17,12 @@ $ database
 ***Процесс работы с таблицей***
 
 Функции:
-  database create_table <имя_таблицы> <столбец1:тип> [<столбецN:тип>] - создать таблицу
-  database list_tables       - показать список всех таблиц
-  database drop_table <имя_таблицы> - удалить таблицу
-  database help             - справочная информация
-  database exit             - выйти из программы (также работает quit)
+  create_table <имя_таблицы> <столбец1:тип> [<столбецN:тип>] - создать таблицу
+  list_tables - показать список всех таблиц
+  drop_table <имя_таблицы> - удалить таблицу
+  help - справочная информация
+  exit - выйти из программы
+
 Введите команду:  create_table users name:str email:str active:bool
 Таблица 'users' создана.
 Введите команду:  list_tables
@@ -34,7 +35,6 @@ $ database
 
 ### Демонстрация работы
 
-[![asciicast](https://asciinema.org/a/6wrosLYPgu27MthzH1Hi7IafY.svg)](https://asciinema.org/a/6wrosLYPgu27MthzH1Hi7IafY)
+[![asciicast](https://asciinema.org/a/1jMZLwEYY73JVr1o7CkDktiow.svg)](https://asciinema.org/a/1jMZLwEYY73JVr1o7CkDktiow)
 
 *Для просмотра локальной записи: `asciinema play docs/demo.cast`.*
-
