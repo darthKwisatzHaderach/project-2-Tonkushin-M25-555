@@ -29,3 +29,23 @@ def save_metadata(filepath: str, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=2)
+
+
+def load_table_data(table_name: str) -> dict:
+    """Загружает данные таблицы из JSON-файла в папке data или возвращает пустой словарь."""
+    data_dir = Path(__file__).parent.parent.parent / "data"
+    filepath = data_dir / f"{table_name}.json"
+    try:
+        with filepath.open("r", encoding="utf-8") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
+
+
+def save_table_data(table_name: str, data: Any) -> None:
+    """Сохраняет данные таблицы в JSON-файл в папке data."""
+    data_dir = Path(__file__).parent.parent.parent / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    filepath = data_dir / f"{table_name}.json"
+    with filepath.open("w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)

@@ -42,3 +42,50 @@ def list_tables(metadata: dict) -> list[tuple[str, list[str]]]:
     """Возвращает список таблиц и их колонок из метаданных."""
 
     return [(name, columns.copy()) for name, columns in metadata.items()]
+
+
+def insert(metadata: dict, table_name: str, values: list) -> dict:
+    if table_name not in metadata:
+        raise ValueError(f"Таблица {table_name!r} не найдена")
+
+    columns_list = metadata[table_name]
+    columns = {}
+    for column in columns_list:
+        column_split = str(column).split(':')
+        column_name = column_split[0]
+        column_type = column_split[1]
+        columns[column_name] = column_type
+
+    if len(columns_list) != len(values):
+        raise ValueError(f"Кол-во значений {len(values)} не соответствует кол-ву столбцов {len(columns_list)}.\n"
+                         f"Столбцы таблицы {columns_list}")
+
+    record = {}
+    for (column_name, column_type), value in zip(columns.items(), values):
+        print(f"{column_name}:{column_type} {value}")
+        record[column_name] = type_casting(column_type, value)
+
+    return record
+
+def type_casting(column_type: str, value: str) -> None | str | int | bool:
+    match column_type:
+        case "str":
+            try:
+                return str(value)
+            except:
+                raise ValueError(f"Значение {value} должно быть строкой")
+        case "int":
+            try:
+                return int(value)
+            except:
+                raise ValueError(f"Значение {value} должно быть числом")
+        case "bool":
+            try:
+                if value.strip().lower() == "true":
+                    return True
+                if value.strip().lower() == "false":
+                    return False
+            except:
+                raise ValueError(f"Значение {value} должно быть true или false")
+        case _:
+            raise ValueError(f"Неподдерживаемый тип {column_type}")

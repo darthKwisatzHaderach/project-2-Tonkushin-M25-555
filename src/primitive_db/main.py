@@ -12,3 +12,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+#insert into users values (1, 2, 3, 4)

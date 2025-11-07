@@ -1,21 +1,4 @@
 {
-  "simple": [
-    "ID:int",
-    "value:str"
-  ],
-  "large": [
-    "ID:int",
-    "col0:str",
-    "col1:str",
-    "col2:str",
-    "col3:str",
-    "col4:str",
-    "col5:str",
-    "col6:str",
-    "col7:str",
-    "col8:str",
-    "col9:str"
-  ],
   "users": [
     "ID:int",
     "name:str",

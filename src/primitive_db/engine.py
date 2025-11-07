@@ -6,9 +6,8 @@ import shlex
 from pathlib import Path
 
 from primitive_db.constants import COMMANDS
-from primitive_db.core import create_table, drop_table, list_tables
-from primitive_db.utils import show_help, load_metadata, save_metadata
-
+from primitive_db.core import create_table, drop_table, list_tables, insert
+from primitive_db.utils import show_help, load_metadata, save_metadata, save_table_data, load_table_data
 
 METADATA_PATH = Path(__file__).with_name("db_meta.json")
 
@@ -58,6 +57,9 @@ def process_command(metadata: dict, command_line: str) -> tuple[dict, bool]:
 
     if cmd == "drop_table":
         return handle_drop_table(metadata, parts)
+
+    if cmd == "insert":
+        return handle_insert(metadata, parts)
 
     if cmd in {"help", "?"}:
         show_help(COMMANDS)
@@ -124,3 +126,64 @@ def handle_drop_table(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     save_metadata(str(METADATA_PATH), updated)
     print(f"Таблица '{table_name}' удалена.")
     return updated, True
+
+def handle_insert(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+    """Создаёт запись в таблице по команде пользователя."""
+
+    if len(parts) < 4:
+        print("Нужно указать имя таблицы и хотя бы одно значение столбца.")
+        return metadata, True
+
+    into_keyword = parts[1]
+
+    if into_keyword != "into":
+        raise ValueError("Неправильный синтаксис команды. Должно быть insert into <имя_таблицы> values (<значение1>, <значение2>, ...)")
+
+    table_name = parts[2]
+    values_keyword = parts[3]
+
+    if values_keyword != "values":
+        raise ValueError("Неправильный синтаксис команды. Должно быть insert into <имя_таблицы> values (<значение1>, <значение2>, ...)")
+
+    values = parts[4:]
+    values[0] = values[0].replace('(', '')
+    values[-1] = values[-1].replace(')', '')
+
+    cleaned_values = []
+    for value in values:
+        cleaned_values.append(value.replace(',', ''))
+
+    table_data = load_table_data(table_name)
+    if not table_data or len(table_data) == 0:
+        max_id = 1
+    else:
+        # Find the dictionary with the maximum 'ID'
+        if isinstance(table_data, dict):
+            records = list(table_data.values()) if table_data else []
+        else:
+            records = table_data if isinstance(table_data, list) else []
+        
+        if records:
+            max_id = max(record['ID'] for record in records if isinstance(record, dict) and 'ID' in record) + 1
+        else:
+            max_id = 1
+
+    cleaned_values.insert(0, max_id)
+
+    try:
+        record = insert(metadata, table_name, cleaned_values)
+    except ValueError as error:
+        print(error)
+        return metadata, True
+
+    # Загружаем существующие данные или создаём новый список
+    existing_data = load_table_data(table_name)
+    if not existing_data or not isinstance(existing_data, list):
+        records_list = []
+    else:
+        records_list = existing_data if isinstance(existing_data, list) else []
+    
+    records_list.append(record)
+    save_table_data(table_name, records_list)
+    print(f"Запись добавлена в таблицу '{table_name}'.")
+    return metadata, True
