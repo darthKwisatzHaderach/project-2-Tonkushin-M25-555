@@ -22,7 +22,14 @@ packages = [
 ]
 
 [tool.poetry.scripts]
+database = "primitive_db.main:main"
 project = "primitive_db.main:main"
+
+[tool.primitive_db]
+# Путь к файлу метаданных (db_meta.json)
+metadata_path = "src/primitive_db/db_meta.json"
+# Путь к директории с данными таблиц
+data_dir = "data"
 
 [tool.ruff]
 line-length = 88

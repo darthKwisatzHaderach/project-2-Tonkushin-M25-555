@@ -4,12 +4,120 @@ from __future__ import annotations
 
 import shlex
 from pathlib import Path
+from prettytable import PrettyTable
 
 from primitive_db.constants import COMMANDS
-from primitive_db.core import create_table, drop_table, list_tables, insert
-from primitive_db.utils import show_help, load_metadata, save_metadata, save_table_data, load_table_data
+from primitive_db.core import create_table, drop_table, list_tables, insert, select, update, delete, type_casting
+from primitive_db.utils import show_help, load_metadata, save_metadata, save_table_data, load_table_data, _load_config
 
-METADATA_PATH = Path(__file__).with_name("db_meta.json")
+def get_metadata_path() -> Path:
+    """Получает путь к файлу метаданных из настроек проекта."""
+    config = _load_config()
+    return Path(config["metadata_path"])
+
+
+def parse_where_clause(parts: list[str], start_idx: int, metadata: dict, table_name: str) -> dict | None:
+    """
+    Парсит условие where из списка частей команды.
+    
+    Превращает строки вида "age = 28" в словари вида {'age': 28}.
+    Требует, чтобы строковые значения были в кавычках.
+    
+    Args:
+        parts: Список частей команды
+        start_idx: Индекс начала условия where (где находится слово "where")
+        metadata: Метаданные таблиц
+        table_name: Имя таблицы
+        
+    Returns:
+        Словарь с условиями или None, если условие не найдено
+    """
+    if start_idx >= len(parts) or parts[start_idx].lower() != "where":
+        return None
+    
+    if len(parts) < start_idx + 4:
+        raise ValueError("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+    
+    if parts[start_idx + 2] != "=":
+        raise ValueError("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+    
+    column_name = parts[start_idx + 1]
+    column_value_str = parts[start_idx + 3]
+    
+    # Получаем типы столбцов
+    if table_name not in metadata:
+        raise ValueError(f"Таблица {table_name!r} не найдена")
+    
+    columns_list = metadata[table_name]
+    column_types = {}
+    for col in columns_list:
+        col_name, _, col_type = col.partition(':')
+        column_types[col_name] = col_type
+    
+    if column_name not in column_types:
+        raise ValueError(f"Столбец {column_name!r} не найден в таблице")
+    
+    # Преобразуем значение в нужный тип
+    typed_value = type_casting(column_types[column_name], column_value_str)
+    
+    return {column_name: typed_value}
+
+
+def parse_set_clause(parts: list[str], start_idx: int, metadata: dict, table_name: str) -> dict:
+    """
+    Парсит условие set из списка частей команды.
+    
+    Превращает строки вида "age = 28" в словари вида {'age': 28}.
+    Требует, чтобы строковые значения были в кавычках.
+    
+    Args:
+        parts: Список частей команды
+        start_idx: Индекс начала условия set (где находится слово "set")
+        metadata: Метаданные таблиц
+        table_name: Имя таблицы
+        
+    Returns:
+        Словарь с полями для обновления
+    """
+    if start_idx >= len(parts) or parts[start_idx].lower() != "set":
+        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+    
+    # Ищем where для определения конца set clause
+    where_idx = None
+    for i in range(start_idx + 1, len(parts)):
+        if parts[i].lower() == "where":
+            where_idx = i
+            break
+    
+    if where_idx is None:
+        raise ValueError("Нужно указать условие where")
+    
+    if where_idx - start_idx < 4:
+        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+    
+    if parts[start_idx + 2] != "=":
+        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+    
+    column_name = parts[start_idx + 1]
+    column_value_str = parts[start_idx + 3]
+    
+    # Получаем типы столбцов
+    if table_name not in metadata:
+        raise ValueError(f"Таблица {table_name!r} не найдена")
+    
+    columns_list = metadata[table_name]
+    column_types = {}
+    for col in columns_list:
+        col_name, _, col_type = col.partition(':')
+        column_types[col_name] = col_type
+    
+    if column_name not in column_types:
+        raise ValueError(f"Столбец {column_name!r} не найден в таблице")
+    
+    # Преобразуем значение в нужный тип
+    typed_value = type_casting(column_types[column_name], column_value_str)
+    
+    return {column_name: typed_value}
 
 
 def get_input(prompt: str = "Введите команду:  ") -> str:
@@ -22,15 +130,18 @@ def get_input(prompt: str = "Введите команду:  ") -> str:
 
 def run() -> None:
     while True:
-        metadata = load_metadata(str(METADATA_PATH))
+        # Загружаем метаданные каждый раз, чтобы получить актуальные данные
+        # Путь также загружаем каждый раз, чтобы он всегда был актуальным
+        metadata_path = get_metadata_path()
+        metadata = load_metadata(str(metadata_path))
         command_line = get_input()
-        metadata, should_continue = process_command(metadata, command_line)
+        metadata, should_continue = process_command(metadata, command_line, metadata_path)
 
         if not should_continue:
             break
 
 
-def process_command(metadata: dict, command_line: str) -> tuple[dict, bool]:
+def process_command(metadata: dict, command_line: str, metadata_path: Path) -> tuple[dict, bool]:
     """Разбирает введенную строку и исполняет соответствующую команду."""
 
     command_line = command_line.strip()
@@ -49,17 +160,26 @@ def process_command(metadata: dict, command_line: str) -> tuple[dict, bool]:
     cmd = parts[0].lower()
 
     if cmd == "create_table":
-        return handle_create_table(metadata, parts)
+        return handle_create_table(metadata, parts, metadata_path)
 
     if cmd == "list_tables":
         handle_list_tables(metadata)
         return metadata, True
 
     if cmd == "drop_table":
-        return handle_drop_table(metadata, parts)
+        return handle_drop_table(metadata, parts, metadata_path)
 
     if cmd == "insert":
         return handle_insert(metadata, parts)
+
+    if cmd == "select":
+        return handle_select(metadata, parts)
+
+    if cmd == "update":
+        return handle_update(metadata, parts)
+
+    if cmd == "delete":
+        return handle_delete(metadata, parts)
 
     if cmd in {"help", "?"}:
         show_help(COMMANDS)
@@ -72,7 +192,7 @@ def process_command(metadata: dict, command_line: str) -> tuple[dict, bool]:
     return metadata, True
 
 
-def handle_create_table(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+def handle_create_table(metadata: dict, parts: list[str], metadata_path: Path) -> tuple[dict, bool]:
     """Создаёт таблицу по команде пользователя."""
 
     if len(parts) < 3:
@@ -88,8 +208,14 @@ def handle_create_table(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
         print(error)
         return metadata, True
 
-    save_metadata(str(METADATA_PATH), updated)
-    print(f"Таблица '{table_name}' создана.")
+    try:
+        metadata_path_str = str(metadata_path.resolve())
+        save_metadata(metadata_path_str, updated)
+        print(f"Таблица '{table_name}' создана.")
+    except Exception as error:
+        print(f"Ошибка при сохранении метаданных в {metadata_path.resolve()}: {error}")
+        return metadata, True
+    
     return updated, True
 
 
@@ -108,7 +234,7 @@ def handle_list_tables(metadata: dict) -> None:
         print(f"  - {name}: {cols}")
 
 
-def handle_drop_table(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+def handle_drop_table(metadata: dict, parts: list[str], metadata_path: Path) -> tuple[dict, bool]:
     """Удаляет таблицу из метаданных по команде пользователя."""
 
     if len(parts) < 2:
@@ -123,8 +249,14 @@ def handle_drop_table(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
         print(error)
         return metadata, True
 
-    save_metadata(str(METADATA_PATH), updated)
-    print(f"Таблица '{table_name}' удалена.")
+    try:
+        metadata_path_str = str(metadata_path.resolve())
+        save_metadata(metadata_path_str, updated)
+        print(f"Таблица '{table_name}' удалена.")
+    except Exception as error:
+        print(f"Ошибка при сохранении метаданных в {metadata_path.resolve()}: {error}")
+        return metadata, True
+    
     return updated, True
 
 def handle_insert(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
@@ -146,44 +278,199 @@ def handle_insert(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
         raise ValueError("Неправильный синтаксис команды. Должно быть insert into <имя_таблицы> values (<значение1>, <значение2>, ...)")
 
     values = parts[4:]
-    values[0] = values[0].replace('(', '')
-    values[-1] = values[-1].replace(')', '')
-
+    
+    # Очищаем значения от возможных скобок, запятых и пробелов по краям
     cleaned_values = []
     for value in values:
-        cleaned_values.append(value.replace(',', ''))
+        cleaned = value.strip().lstrip('(').rstrip(')').strip(',').strip()
+        cleaned_values.append(cleaned)
 
+    # Загружаем существующие данные таблицы
     table_data = load_table_data(table_name)
-    if not table_data or len(table_data) == 0:
-        max_id = 1
-    else:
-        # Find the dictionary with the maximum 'ID'
-        if isinstance(table_data, dict):
-            records = list(table_data.values()) if table_data else []
-        else:
-            records = table_data if isinstance(table_data, list) else []
-        
-        if records:
-            max_id = max(record['ID'] for record in records if isinstance(record, dict) and 'ID' in record) + 1
-        else:
-            max_id = 1
-
-    cleaned_values.insert(0, max_id)
+    # Преобразуем в список, если это словарь
+    if isinstance(table_data, dict):
+        table_data = list(table_data.values()) if table_data else []
+    elif not isinstance(table_data, list):
+        table_data = []
 
     try:
-        record = insert(metadata, table_name, cleaned_values)
+        # insert теперь генерирует ID, валидирует типы и добавляет запись
+        # Возвращает измененные данные таблицы
+        updated_table_data = insert(metadata, table_name, cleaned_values, table_data)
+        save_table_data(table_name, updated_table_data)
+        print(f"Запись добавлена в таблицу '{table_name}'.")
     except ValueError as error:
         print(error)
         return metadata, True
 
-    # Загружаем существующие данные или создаём новый список
-    existing_data = load_table_data(table_name)
-    if not existing_data or not isinstance(existing_data, list):
-        records_list = []
-    else:
-        records_list = existing_data if isinstance(existing_data, list) else []
+    return metadata, True
+
+
+def handle_select(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+    """Читает записи из таблицы по команде пользователя."""
     
-    records_list.append(record)
-    save_table_data(table_name, records_list)
-    print(f"Запись добавлена в таблицу '{table_name}'.")
+    if len(parts) < 3:
+        print("Нужно указать имя таблицы.")
+        return metadata, True
+    
+    from_keyword = parts[1]
+    if from_keyword != "from":
+        print("Неправильный синтаксис команды. Должно быть select from <имя_таблицы> [where <столбец> = <значение>]")
+        return metadata, True
+    
+    table_name = parts[2]
+    
+    # Проверяем существование таблицы
+    if table_name not in metadata:
+        print(f"Таблица {table_name!r} не найдена")
+        return metadata, True
+    
+    # Загружаем данные таблицы
+    table_data = load_table_data(table_name)
+    if isinstance(table_data, dict):
+        table_data = list(table_data.values()) if table_data else []
+    elif not isinstance(table_data, list):
+        table_data = []
+    
+    # Парсим условие where, если есть
+    where_clause = None
+    if len(parts) > 3:
+        try:
+            where_clause = parse_where_clause(parts, 3, metadata, table_name)
+        except ValueError as error:
+            print(error)
+            return metadata, True
+    
+    # Выполняем select
+    try:
+        results = select(table_data, where_clause)
+        
+        if not results:
+            print("Записи не найдены.")
+        else:
+            # Используем prettytable для красивого вывода
+            # Получаем названия столбцов из первой записи
+            columns = list(results[0].keys())
+            # Убеждаемся, что ID идет первым
+            if 'ID' in columns:
+                columns.remove('ID')
+                columns.insert(0, 'ID')
+            
+            table = PrettyTable(columns)
+            table.align = "l"  # Выравнивание по левому краю
+            table.padding_width = 1  # Отступы
+            
+            # Добавляем данные
+            for record in results:
+                row = [record.get(col, '') for col in columns]
+                table.add_row(row)
+            
+            print(table)
+    except ValueError as error:
+        print(error)
+        return metadata, True
+    
+    return metadata, True
+
+
+def handle_update(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+    """Обновляет записи в таблице по команде пользователя."""
+    
+    if len(parts) < 6:
+        print("Нужно указать имя таблицы, set и where условия.")
+        return metadata, True
+    
+    table_name = parts[1]
+    
+    # Проверяем существование таблицы
+    if table_name not in metadata:
+        print(f"Таблица {table_name!r} не найдена")
+        return metadata, True
+    
+    # Находим индексы set и where
+    set_keyword_idx = None
+    where_keyword_idx = None
+    for i, part in enumerate(parts):
+        if part.lower() == "set":
+            set_keyword_idx = i
+        elif part.lower() == "where":
+            where_keyword_idx = i
+    
+    if set_keyword_idx is None or where_keyword_idx is None:
+        print("Неправильный синтаксис команды. Должно быть update <имя_таблицы> set <столбец> = <значение> where <столбец> = <значение>")
+        return metadata, True
+    
+    # Загружаем данные таблицы
+    table_data = load_table_data(table_name)
+    if isinstance(table_data, dict):
+        table_data = list(table_data.values()) if table_data else []
+    elif not isinstance(table_data, list):
+        table_data = []
+    
+    # Парсим set и where условия используя парсеры
+    try:
+        set_clause = parse_set_clause(parts, set_keyword_idx, metadata, table_name)
+        where_clause = parse_where_clause(parts, where_keyword_idx, metadata, table_name)
+        
+        if where_clause is None:
+            print("Нужно указать условие where.")
+            return metadata, True
+        
+        # Выполняем update
+        updated_data = update(table_data, set_clause, where_clause)
+        save_table_data(table_name, updated_data)
+        print(f"Записи обновлены в таблице '{table_name}'.")
+    except ValueError as error:
+        print(error)
+        return metadata, True
+    
+    return metadata, True
+
+
+def handle_delete(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
+    """Удаляет записи из таблицы по команде пользователя."""
+    
+    if len(parts) < 6:
+        print("Нужно указать имя таблицы и условие where.")
+        return metadata, True
+    
+    from_keyword = parts[1]
+    if from_keyword != "from":
+        print("Неправильный синтаксис команды. Должно быть delete from <имя_таблицы> where <столбец> = <значение>")
+        return metadata, True
+    
+    table_name = parts[2]
+    
+    # Проверяем существование таблицы
+    if table_name not in metadata:
+        print(f"Таблица {table_name!r} не найдена")
+        return metadata, True
+    
+    # Загружаем данные таблицы
+    table_data = load_table_data(table_name)
+    if isinstance(table_data, dict):
+        table_data = list(table_data.values()) if table_data else []
+    elif not isinstance(table_data, list):
+        table_data = []
+    
+    # Парсим where условие используя парсер
+    try:
+        if len(parts) < 4 or parts[3].lower() != "where":
+            print("Неправильный синтаксис команды. Должно быть delete from <имя_таблицы> where <столбец> = <значение>")
+            return metadata, True
+        
+        where_clause = parse_where_clause(parts, 3, metadata, table_name)
+        
+        if where_clause is None:
+            print("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+            return metadata, True
+        
+        # Выполняем delete
+        updated_data = delete(table_data, where_clause)
+        save_table_data(table_name, updated_data)
+        print(f"Записи удалены из таблицы '{table_name}'.")
+    except ValueError as error:
+        print(error)
+        return metadata, True
+    
     return metadata, True

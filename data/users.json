@@ -5,5 +5,12 @@
     "email": "ivan@mail.ru",
     "age": 30,
     "active": true
+  },
+  {
+    "ID": 2,
+    "name": "Добрыня",
+    "email": "dobry@mail.ru",
+    "age": 42,
+    "active": true
   }
 ]
