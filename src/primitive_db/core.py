@@ -1,3 +1,6 @@
+"""Основная бизнес-логика базы данных (CRUD-операции)."""
+
+from primitive_db.constants import VALID_TYPES
 from primitive_db.decorators import confirm_action, handle_db_errors, log_time
 
 
@@ -15,7 +18,7 @@ def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
         name, _, type_name = column.partition(":")
         if not type_name:
             raise ValueError(f"Колонка {column!r} без типа")
-        if type_name not in {"int", "str", "bool"}:
+        if type_name not in VALID_TYPES:
             raise ValueError(f"Тип {type_name!r} не поддерживается")
         if name.upper() == "ID":
             has_id = True

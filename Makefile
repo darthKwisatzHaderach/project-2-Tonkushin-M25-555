@@ -1,6 +1,9 @@
 install:
 	poetry install
 
+run:
+	poetry run database
+
 project:
 	poetry run project
 

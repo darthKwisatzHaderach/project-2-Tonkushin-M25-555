@@ -278,7 +278,7 @@ def handle_list_tables(metadata: dict) -> None:
 def handle_drop_table(
     metadata: dict, parts: list[str], metadata_path: Path
 ) -> tuple[dict, bool]:
-    """Удаляет таблицу из метаданных по команде пользователя."""
+    """Удаляет таблицу из метаданных и файл с данными по команде пользователя."""
 
     if len(parts) < 2:
         print("Нужно указать имя таблицы для удаления.")
@@ -290,6 +290,16 @@ def handle_drop_table(
     
     if updated is None:
         return metadata, True
+    
+    # Удаляем файл с данными таблицы
+    config = _load_config()
+    data_dir = Path(config["data_dir"])
+    data_file = data_dir / f"{table_name}.json"
+    if data_file.exists():
+        try:
+            data_file.unlink()
+        except Exception as e:
+            print(f"Предупреждение: не удалось удалить файл данных {data_file}: {e}")
     
     metadata_path_str = str(metadata_path.resolve())
     save_metadata(metadata_path_str, updated)

@@ -1,7 +1,7 @@
 [project]
 name = "project-2-tonkushin-m25-555"
 version = "0.1.0"
-description = ""
+description = "Примитивная файловая база данных на Python с поддержкой CRUD-операций"
 authors = [
     { name = "Dmitriy Tonkushin", email = "dmitriy.tonkushin@yandex.ru" }
 ]

@@ -177,6 +177,6 @@ make package-install
 
 ### Демонстрация работы
 
-[![asciicast](https://asciinema.org/a/1jMZLwEYY73JVr1o7CkDktiow.svg)](https://asciinema.org/a/1jMZLwEYY73JVr1o7CkDktiow)
+[![asciicast](https://asciinema.org/a/fnZhgHZaRNUf2PCIQrSa35owl.svg)](https://asciinema.org/a/fnZhgHZaRNUf2PCIQrSa35owl)
 
 *Для просмотра локальной записи: `asciinema play docs/demo.cast`.*

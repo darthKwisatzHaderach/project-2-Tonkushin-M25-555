@@ -4,4 +4,6 @@ dist/
 __pycache__/
 *.pyc
 .DS_Store
-*.cast
+
+# Файлы базы данных (генерируются при работе)
+data/*.json
