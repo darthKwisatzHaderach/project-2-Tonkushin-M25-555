@@ -19,5 +19,9 @@
     "product_id:int",
     "quantity:int",
     "total:str"
+  ],
+  "test": [
+    "ID:int",
+    "name:str"
   ]
 }

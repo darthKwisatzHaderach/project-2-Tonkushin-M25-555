@@ -16,6 +16,7 @@ except ImportError:
         tomllib = None
 
 
+
 def show_help(commands: dict) -> None:
     """Печатает доступные команды с описаниями, выровненными по колонке."""
     print("\nФункции:")
@@ -67,30 +68,28 @@ def _load_config() -> dict[str, str]:
                 break
             current = parent
     
+    # Значения по умолчанию (соответствуют pyproject.toml)
+    # Используются только если pyproject.toml недоступен
+    # (например, при установке пакета через pip)
+    DEFAULT_METADATA_PATH = "src/primitive_db/db_meta.json"
+    DEFAULT_DATA_DIR = "data"
+    
     if not project_root:
-        # Fallback: используем значения по умолчанию относительно текущей директории
+        # Fallback: pyproject.toml не найден
+        # (запуск не из корня проекта или пакет установлен)
         return {
-            "metadata_path": str(Path.cwd() / "src" / "primitive_db" / "db_meta.json"),
-            "data_dir": str(Path.cwd() / "data")
+            "metadata_path": str(Path.cwd() / DEFAULT_METADATA_PATH),
+            "data_dir": str(Path.cwd() / DEFAULT_DATA_DIR)
         }
     
     # Читаем настройки из pyproject.toml
     pyproject_path = project_root / "pyproject.toml"
-    if not pyproject_path.exists():
-        return {
-            "metadata_path": str(
-                project_root / "src" / "primitive_db" / "db_meta.json"
-            ),
-            "data_dir": str(project_root / "data")
-        }
     
-    if tomllib is None:
-        # Если tomllib недоступен, используем значения по умолчанию
+    if not pyproject_path.exists() or tomllib is None:
+        # Fallback: файл не существует или tomllib недоступен
         return {
-            "metadata_path": str(
-                project_root / "src" / "primitive_db" / "db_meta.json"
-            ),
-            "data_dir": str(project_root / "data")
+            "metadata_path": str(project_root / DEFAULT_METADATA_PATH),
+            "data_dir": str(project_root / DEFAULT_DATA_DIR)
         }
     
     try:
@@ -101,9 +100,9 @@ def _load_config() -> dict[str, str]:
         
         # Получаем пути из конфига или используем значения по умолчанию
         metadata_path = primitive_db_config.get(
-            "metadata_path", "src/primitive_db/db_meta.json"
+            "metadata_path", DEFAULT_METADATA_PATH
         )
-        data_dir = primitive_db_config.get("data_dir", "data")
+        data_dir = primitive_db_config.get("data_dir", DEFAULT_DATA_DIR)
         
         # Если пути относительные, делаем их относительно корня проекта
         if not Path(metadata_path).is_absolute():
@@ -116,12 +115,10 @@ def _load_config() -> dict[str, str]:
             "data_dir": data_dir
         }
     except Exception:
-        # В случае ошибки используем значения по умолчанию
+        # Fallback: ошибка при чтении/парсинге pyproject.toml
         return {
-            "metadata_path": str(
-                project_root / "src" / "primitive_db" / "db_meta.json"
-            ),
-            "data_dir": str(project_root / "data")
+            "metadata_path": str(project_root / DEFAULT_METADATA_PATH),
+            "data_dir": str(project_root / DEFAULT_DATA_DIR)
         }
 
 
