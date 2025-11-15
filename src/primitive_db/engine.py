@@ -4,11 +4,32 @@ from __future__ import annotations
 
 import shlex
 from pathlib import Path
+
 from prettytable import PrettyTable
 
 from primitive_db.constants import COMMANDS
-from primitive_db.core import create_table, drop_table, list_tables, insert, select, update, delete, type_casting
-from primitive_db.utils import show_help, load_metadata, save_metadata, save_table_data, load_table_data, _load_config
+from primitive_db.core import (
+    create_table,
+    delete,
+    drop_table,
+    insert,
+    list_tables,
+    select,
+    type_casting,
+    update,
+)
+from primitive_db.decorators import create_cacher
+from primitive_db.utils import (
+    _load_config,
+    load_metadata,
+    load_table_data,
+    save_metadata,
+    save_table_data,
+    show_help,
+)
+
+# Создаем кэшер для результатов select
+_select_cache = create_cacher()
 
 def get_metadata_path() -> Path:
     """Получает путь к файлу метаданных из настроек проекта."""
@@ -16,7 +37,9 @@ def get_metadata_path() -> Path:
     return Path(config["metadata_path"])
 
 
-def parse_where_clause(parts: list[str], start_idx: int, metadata: dict, table_name: str) -> dict | None:
+def parse_where_clause(
+    parts: list[str], start_idx: int, metadata: dict, table_name: str
+) -> dict | None:
     """
     Парсит условие where из списка частей команды.
     
@@ -36,10 +59,16 @@ def parse_where_clause(parts: list[str], start_idx: int, metadata: dict, table_n
         return None
     
     if len(parts) < start_idx + 4:
-        raise ValueError("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+        raise ValueError(
+            "Неправильный синтаксис where. "
+            "Должно быть where <столбец> = <значение>"
+        )
     
     if parts[start_idx + 2] != "=":
-        raise ValueError("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+        raise ValueError(
+            "Неправильный синтаксис where. "
+            "Должно быть where <столбец> = <значение>"
+        )
     
     column_name = parts[start_idx + 1]
     column_value_str = parts[start_idx + 3]
@@ -63,7 +92,9 @@ def parse_where_clause(parts: list[str], start_idx: int, metadata: dict, table_n
     return {column_name: typed_value}
 
 
-def parse_set_clause(parts: list[str], start_idx: int, metadata: dict, table_name: str) -> dict:
+def parse_set_clause(
+    parts: list[str], start_idx: int, metadata: dict, table_name: str
+) -> dict:
     """
     Парсит условие set из списка частей команды.
     
@@ -80,7 +111,10 @@ def parse_set_clause(parts: list[str], start_idx: int, metadata: dict, table_nam
         Словарь с полями для обновления
     """
     if start_idx >= len(parts) or parts[start_idx].lower() != "set":
-        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+        raise ValueError(
+            "Неправильный синтаксис set. "
+            "Должно быть set <столбец> = <значение>"
+        )
     
     # Ищем where для определения конца set clause
     where_idx = None
@@ -93,10 +127,16 @@ def parse_set_clause(parts: list[str], start_idx: int, metadata: dict, table_nam
         raise ValueError("Нужно указать условие where")
     
     if where_idx - start_idx < 4:
-        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+        raise ValueError(
+            "Неправильный синтаксис set. "
+            "Должно быть set <столбец> = <значение>"
+        )
     
     if parts[start_idx + 2] != "=":
-        raise ValueError("Неправильный синтаксис set. Должно быть set <столбец> = <значение>")
+        raise ValueError(
+            "Неправильный синтаксис set. "
+            "Должно быть set <столбец> = <значение>"
+        )
     
     column_name = parts[start_idx + 1]
     column_value_str = parts[start_idx + 3]
@@ -135,13 +175,17 @@ def run() -> None:
         metadata_path = get_metadata_path()
         metadata = load_metadata(str(metadata_path))
         command_line = get_input()
-        metadata, should_continue = process_command(metadata, command_line, metadata_path)
+        metadata, should_continue = process_command(
+            metadata, command_line, metadata_path
+        )
 
         if not should_continue:
             break
 
 
-def process_command(metadata: dict, command_line: str, metadata_path: Path) -> tuple[dict, bool]:
+def process_command(
+    metadata: dict, command_line: str, metadata_path: Path
+) -> tuple[dict, bool]:
     """Разбирает введенную строку и исполняет соответствующую команду."""
 
     command_line = command_line.strip()
@@ -192,7 +236,9 @@ def process_command(metadata: dict, command_line: str, metadata_path: Path) -> t
     return metadata, True
 
 
-def handle_create_table(metadata: dict, parts: list[str], metadata_path: Path) -> tuple[dict, bool]:
+def handle_create_table(
+    metadata: dict, parts: list[str], metadata_path: Path
+) -> tuple[dict, bool]:
     """Создаёт таблицу по команде пользователя."""
 
     if len(parts) < 3:
@@ -202,19 +248,14 @@ def handle_create_table(metadata: dict, parts: list[str], metadata_path: Path) -
     table_name = parts[1]
     columns = parts[2:]
 
-    try:
-        updated = create_table(metadata, table_name, columns)
-    except ValueError as error:
-        print(error)
+    updated = create_table(metadata, table_name, columns)
+    
+    if updated is None:
         return metadata, True
-
-    try:
-        metadata_path_str = str(metadata_path.resolve())
-        save_metadata(metadata_path_str, updated)
-        print(f"Таблица '{table_name}' создана.")
-    except Exception as error:
-        print(f"Ошибка при сохранении метаданных в {metadata_path.resolve()}: {error}")
-        return metadata, True
+    
+    metadata_path_str = str(metadata_path.resolve())
+    save_metadata(metadata_path_str, updated)
+    print(f"Таблица '{table_name}' создана.")
     
     return updated, True
 
@@ -234,7 +275,9 @@ def handle_list_tables(metadata: dict) -> None:
         print(f"  - {name}: {cols}")
 
 
-def handle_drop_table(metadata: dict, parts: list[str], metadata_path: Path) -> tuple[dict, bool]:
+def handle_drop_table(
+    metadata: dict, parts: list[str], metadata_path: Path
+) -> tuple[dict, bool]:
     """Удаляет таблицу из метаданных по команде пользователя."""
 
     if len(parts) < 2:
@@ -243,19 +286,16 @@ def handle_drop_table(metadata: dict, parts: list[str], metadata_path: Path) -> 
 
     table_name = parts[1]
 
-    try:
-        updated = drop_table(metadata, table_name)
-    except ValueError as error:
-        print(error)
+    updated = drop_table(metadata, table_name)
+    
+    if updated is None:
         return metadata, True
-
-    try:
-        metadata_path_str = str(metadata_path.resolve())
-        save_metadata(metadata_path_str, updated)
-        print(f"Таблица '{table_name}' удалена.")
-    except Exception as error:
-        print(f"Ошибка при сохранении метаданных в {metadata_path.resolve()}: {error}")
-        return metadata, True
+    
+    metadata_path_str = str(metadata_path.resolve())
+    save_metadata(metadata_path_str, updated)
+    print(f"Таблица '{table_name}' удалена.")
+    # Очищаем кэш после удаления таблицы
+    _select_cache.clear()  # type: ignore
     
     return updated, True
 
@@ -269,13 +309,19 @@ def handle_insert(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     into_keyword = parts[1]
 
     if into_keyword != "into":
-        raise ValueError("Неправильный синтаксис команды. Должно быть insert into <имя_таблицы> values (<значение1>, <значение2>, ...)")
+        raise ValueError(
+            "Неправильный синтаксис команды. "
+            "Должно быть insert into <имя_таблицы> values (<значение1>, ...)"
+        )
 
     table_name = parts[2]
     values_keyword = parts[3]
 
     if values_keyword != "values":
-        raise ValueError("Неправильный синтаксис команды. Должно быть insert into <имя_таблицы> values (<значение1>, <значение2>, ...)")
+        raise ValueError(
+            "Неправильный синтаксис команды. "
+            "Должно быть insert into <имя_таблицы> values (<значение1>, ...)"
+        )
 
     values = parts[4:]
     
@@ -293,14 +339,16 @@ def handle_insert(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     elif not isinstance(table_data, list):
         table_data = []
 
-    try:
-        # insert теперь генерирует ID, валидирует типы и добавляет запись
-        # Возвращает измененные данные таблицы
-        updated_table_data = insert(metadata, table_name, cleaned_values, table_data)
+    # insert теперь генерирует ID, валидирует типы и добавляет запись
+    # Возвращает измененные данные таблицы
+    updated_table_data = insert(metadata, table_name, cleaned_values, table_data)
+    
+    if updated_table_data is not None:
         save_table_data(table_name, updated_table_data)
         print(f"Запись добавлена в таблицу '{table_name}'.")
-    except ValueError as error:
-        print(error)
+        # Очищаем кэш после вставки
+        _select_cache.clear()  # type: ignore
+    else:
         return metadata, True
 
     return metadata, True
@@ -315,7 +363,10 @@ def handle_select(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     
     from_keyword = parts[1]
     if from_keyword != "from":
-        print("Неправильный синтаксис команды. Должно быть select from <имя_таблицы> [where <столбец> = <значение>]")
+        print(
+            "Неправильный синтаксис команды. "
+            "Должно быть select from <имя_таблицы> [where <столбец> = <значение>]"
+        )
         return metadata, True
     
     table_name = parts[2]
@@ -341,34 +392,39 @@ def handle_select(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
             print(error)
             return metadata, True
     
-    # Выполняем select
-    try:
-        results = select(table_data, where_clause)
-        
-        if not results:
-            print("Записи не найдены.")
-        else:
-            # Используем prettytable для красивого вывода
-            # Получаем названия столбцов из первой записи
-            columns = list(results[0].keys())
-            # Убеждаемся, что ID идет первым
-            if 'ID' in columns:
-                columns.remove('ID')
-                columns.insert(0, 'ID')
-            
-            table = PrettyTable(columns)
-            table.align = "l"  # Выравнивание по левому краю
-            table.padding_width = 1  # Отступы
-            
-            # Добавляем данные
-            for record in results:
-                row = [record.get(col, '') for col in columns]
-                table.add_row(row)
-            
-            print(table)
-    except ValueError as error:
-        print(error)
+    # Создаем ключ для кэша на основе имени таблицы и условия where
+    cache_key = f"{table_name}:{where_clause}"
+    
+    # Используем кэширование для select
+    def perform_select():
+        return select(table_data, where_clause)
+    
+    results = _select_cache(cache_key, perform_select)
+    
+    if results is None:
         return metadata, True
+    
+    if not results:
+        print("Записи не найдены.")
+    else:
+        # Используем prettytable для красивого вывода
+        # Получаем названия столбцов из первой записи
+        columns = list(results[0].keys())
+        # Убеждаемся, что ID идет первым
+        if 'ID' in columns:
+            columns.remove('ID')
+            columns.insert(0, 'ID')
+        
+        table = PrettyTable(columns)
+        table.align = "l"  # Выравнивание по левому краю
+        table.padding_width = 1  # Отступы
+        
+        # Добавляем данные
+        for record in results:
+            row = [record.get(col, '') for col in columns]
+            table.add_row(row)
+        
+        print(table)
     
     return metadata, True
 
@@ -397,7 +453,11 @@ def handle_update(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
             where_keyword_idx = i
     
     if set_keyword_idx is None or where_keyword_idx is None:
-        print("Неправильный синтаксис команды. Должно быть update <имя_таблицы> set <столбец> = <значение> where <столбец> = <значение>")
+        print(
+            "Неправильный синтаксис команды. "
+            "Должно быть update <имя_таблицы> set <столбец> = <значение> "
+            "where <столбец> = <значение>"
+        )
         return metadata, True
     
     # Загружаем данные таблицы
@@ -409,19 +469,29 @@ def handle_update(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     
     # Парсим set и where условия используя парсеры
     try:
-        set_clause = parse_set_clause(parts, set_keyword_idx, metadata, table_name)
-        where_clause = parse_where_clause(parts, where_keyword_idx, metadata, table_name)
+        set_clause = parse_set_clause(
+            parts, set_keyword_idx, metadata, table_name
+        )
+        where_clause = parse_where_clause(
+            parts, where_keyword_idx, metadata, table_name
+        )
         
         if where_clause is None:
             print("Нужно указать условие where.")
             return metadata, True
-        
-        # Выполняем update
-        updated_data = update(table_data, set_clause, where_clause)
-        save_table_data(table_name, updated_data)
-        print(f"Записи обновлены в таблице '{table_name}'.")
     except ValueError as error:
         print(error)
+        return metadata, True
+    
+    # Выполняем update
+    updated_data = update(table_data, set_clause, where_clause)
+    
+    if updated_data is not None:
+        save_table_data(table_name, updated_data)
+        print(f"Записи обновлены в таблице '{table_name}'.")
+        # Очищаем кэш после обновления
+        _select_cache.clear()  # type: ignore
+    else:
         return metadata, True
     
     return metadata, True
@@ -436,7 +506,10 @@ def handle_delete(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     
     from_keyword = parts[1]
     if from_keyword != "from":
-        print("Неправильный синтаксис команды. Должно быть delete from <имя_таблицы> where <столбец> = <значение>")
+        print(
+            "Неправильный синтаксис команды. "
+            "Должно быть delete from <имя_таблицы> where <столбец> = <значение>"
+        )
         return metadata, True
     
     table_name = parts[2]
@@ -456,21 +529,33 @@ def handle_delete(metadata: dict, parts: list[str]) -> tuple[dict, bool]:
     # Парсим where условие используя парсер
     try:
         if len(parts) < 4 or parts[3].lower() != "where":
-            print("Неправильный синтаксис команды. Должно быть delete from <имя_таблицы> where <столбец> = <значение>")
+            print(
+                "Неправильный синтаксис команды. "
+                "Должно быть delete from <имя_таблицы> where <столбец> = <значение>"
+            )
             return metadata, True
         
         where_clause = parse_where_clause(parts, 3, metadata, table_name)
         
         if where_clause is None:
-            print("Неправильный синтаксис where. Должно быть where <столбец> = <значение>")
+            print(
+                "Неправильный синтаксис where. "
+                "Должно быть where <столбец> = <значение>"
+            )
             return metadata, True
-        
-        # Выполняем delete
-        updated_data = delete(table_data, where_clause)
-        save_table_data(table_name, updated_data)
-        print(f"Записи удалены из таблицы '{table_name}'.")
     except ValueError as error:
         print(error)
+        return metadata, True
+    
+    # Выполняем delete
+    updated_data = delete(table_data, where_clause)
+    
+    if updated_data is not None:
+        save_table_data(table_name, updated_data)
+        print(f"Записи удалены из таблицы '{table_name}'.")
+        # Очищаем кэш после удаления
+        _select_cache.clear()  # type: ignore
+    else:
         return metadata, True
     
     return metadata, True

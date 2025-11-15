@@ -19,12 +19,5 @@
     "product_id:int",
     "quantity:int",
     "total:str"
-  ],
-  "books": [
-    "ID:int",
-    "name:str",
-    "size:int",
-    "year:int",
-    "author:str"
   ]
 }

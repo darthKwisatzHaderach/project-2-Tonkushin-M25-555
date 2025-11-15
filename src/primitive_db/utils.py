@@ -78,14 +78,18 @@ def _load_config() -> dict[str, str]:
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():
         return {
-            "metadata_path": str(project_root / "src" / "primitive_db" / "db_meta.json"),
+            "metadata_path": str(
+                project_root / "src" / "primitive_db" / "db_meta.json"
+            ),
             "data_dir": str(project_root / "data")
         }
     
     if tomllib is None:
         # Если tomllib недоступен, используем значения по умолчанию
         return {
-            "metadata_path": str(project_root / "src" / "primitive_db" / "db_meta.json"),
+            "metadata_path": str(
+                project_root / "src" / "primitive_db" / "db_meta.json"
+            ),
             "data_dir": str(project_root / "data")
         }
     
@@ -96,7 +100,9 @@ def _load_config() -> dict[str, str]:
         primitive_db_config = config.get("tool", {}).get("primitive_db", {})
         
         # Получаем пути из конфига или используем значения по умолчанию
-        metadata_path = primitive_db_config.get("metadata_path", "src/primitive_db/db_meta.json")
+        metadata_path = primitive_db_config.get(
+            "metadata_path", "src/primitive_db/db_meta.json"
+        )
         data_dir = primitive_db_config.get("data_dir", "data")
         
         # Если пути относительные, делаем их относительно корня проекта
@@ -112,13 +118,19 @@ def _load_config() -> dict[str, str]:
     except Exception:
         # В случае ошибки используем значения по умолчанию
         return {
-            "metadata_path": str(project_root / "src" / "primitive_db" / "db_meta.json"),
+            "metadata_path": str(
+                project_root / "src" / "primitive_db" / "db_meta.json"
+            ),
             "data_dir": str(project_root / "data")
         }
 
 
 def load_table_data(table_name: str) -> dict:
-    """Загружает данные таблицы из JSON-файла в папке data или возвращает пустой словарь."""
+    """
+    Загружает данные таблицы из JSON-файла в папке data.
+    
+    Возвращает пустой словарь, если файл не найден.
+    """
     config = _load_config()
     data_dir = Path(config["data_dir"])
     filepath = data_dir / f"{table_name}.json"

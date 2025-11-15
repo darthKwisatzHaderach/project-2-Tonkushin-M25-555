@@ -1,3 +1,7 @@
+from primitive_db.decorators import confirm_action, handle_db_errors, log_time
+
+
+@handle_db_errors
 def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
     """Создаёт таблицу в метаданных, добавляя обязательный столбец ID:int."""
     if table_name in metadata:
@@ -28,6 +32,8 @@ def create_table(metadata: dict, table_name: str, columns: list[str]) -> dict:
     metadata[table_name] = normalized
     return metadata
 
+@confirm_action("удаление таблицы")
+@handle_db_errors
 def drop_table(metadata: dict, table_name: str) -> dict:
     """Удаляет таблицу из метаданных, если она существует."""
     if table_name not in metadata:
@@ -44,7 +50,11 @@ def list_tables(metadata: dict) -> list[tuple[str, list[str]]]:
     return [(name, columns.copy()) for name, columns in metadata.items()]
 
 
-def insert(metadata: dict, table_name: str, values: list, table_data: list | None = None) -> list:
+@log_time
+@handle_db_errors
+def insert(
+    metadata: dict, table_name: str, values: list, table_data: list | None = None
+) -> list:
     """
     Добавляет новую запись в таблицу.
     
@@ -68,24 +78,36 @@ def insert(metadata: dict, table_name: str, values: list, table_data: list | Non
     expected_count = len(columns_list) - 1  # минус ID
     if len(values) != expected_count:
         # Получаем названия столбцов без ID для сообщения об ошибке
-        column_names = [col.split(':')[0] for col in columns_list[1:]]  # Пропускаем ID
-        raise ValueError(f"Кол-во значений {len(values)} не соответствует кол-ву столбцов (минус ID) {expected_count}.\n"
-                         f"Ожидаемые столбцы (без ID): {', '.join(column_names)}\n"
-                         f"Все поля обязательны.")
+        column_names = [col.split(':')[0] for col in columns_list[1:]]
+        raise ValueError(
+            f"Кол-во значений {len(values)} не соответствует "
+            f"кол-ву столбцов (минус ID) {expected_count}.\n"
+            f"Ожидаемые столбцы (без ID): {', '.join(column_names)}\n"
+            f"Все поля обязательны."
+        )
 
     # Проверяем, что все значения не пустые (все поля обязательны)
     for i, value in enumerate(values):
         if value is None or (isinstance(value, str) and value.strip() == ''):
             column_names = [col.split(':')[0] for col in columns_list[1:]]
-            column_name = column_names[i] if i < len(column_names) else f"столбец {i+1}"
-            raise ValueError(f"Поле '{column_name}' не может быть пустым. Все поля обязательны.")
+            column_name = (
+                column_names[i] if i < len(column_names) else f"столбец {i+1}"
+            )
+            raise ValueError(
+                f"Поле '{column_name}' не может быть пустым. "
+                f"Все поля обязательны."
+            )
 
     # Генерируем новый ID на основе последней записи
     if table_data is None or len(table_data) == 0:
         new_id = 1
     else:
         # Находим максимальный ID среди всех записей
-        ids = [record.get('ID', 0) for record in table_data if isinstance(record, dict) and 'ID' in record]
+        ids = [
+            record.get('ID', 0)
+            for record in table_data
+            if isinstance(record, dict) and 'ID' in record
+        ]
         new_id = max(ids) + 1 if ids else 1
 
     # Создаем запись с валидацией типов
@@ -102,6 +124,8 @@ def insert(metadata: dict, table_name: str, values: list, table_data: list | Non
 
     return table_data
 
+@log_time
+@handle_db_errors
 def select(table_data: list, where_clause: dict | None = None) -> list:
     """
     Возвращает записи из таблицы.
@@ -118,13 +142,16 @@ def select(table_data: list, where_clause: dict | None = None) -> list:
         if not isinstance(record, dict):
             continue
         # Проверяем, что все условия where_clause выполняются
-        matches = all(record.get(key) == value for key, value in where_clause.items())
+        matches = all(
+            record.get(key) == value for key, value in where_clause.items()
+        )
         if matches:
             result.append(record)
     
     return result
 
 
+@handle_db_errors
 def update(table_data: list, set_clause: dict, where_clause: dict) -> list:
     """
     Обновляет записи в таблице.
@@ -142,7 +169,9 @@ def update(table_data: list, set_clause: dict, where_clause: dict) -> list:
             continue
         
         # Проверяем, соответствует ли запись условию where_clause
-        matches = all(record.get(key) == value for key, value in where_clause.items())
+        matches = all(
+            record.get(key) == value for key, value in where_clause.items()
+        )
         
         if matches:
             # Создаем обновленную копию записи
@@ -156,6 +185,8 @@ def update(table_data: list, set_clause: dict, where_clause: dict) -> list:
     return updated_data
 
 
+@confirm_action("удаление записей")
+@handle_db_errors
 def delete(table_data: list, where_clause: dict) -> list:
     """
     Удаляет записи из таблицы.
@@ -173,9 +204,11 @@ def delete(table_data: list, where_clause: dict) -> list:
             continue
         
         # Проверяем, соответствует ли запись условию where_clause
-        matches = all(record.get(key) == value for key, value in where_clause.items())
+        matches = all(
+            record.get(key) == value for key, value in where_clause.items()
+        )
         
-        # Добавляем только те записи, которые НЕ соответствуют условию (т.е. не удаляем их)
+        # Добавляем только записи, НЕ соответствующие условию
         if not matches:
             result.append(record)
     
@@ -187,8 +220,10 @@ def type_casting(column_type: str, value: str) -> None | str | int | bool:
         case "str":
             try:
                 return str(value)
-            except:
-                raise ValueError(f"Значение {value} должно быть строкой")
+            except Exception as e:
+                raise ValueError(
+                    f"Значение {value} должно быть строкой"
+                ) from e
         case "int":
             try:
                 # Удаляем пробелы и невидимые символы перед преобразованием
@@ -202,7 +237,9 @@ def type_casting(column_type: str, value: str) -> None | str | int | bool:
                     return True
                 if value.strip().lower() == "false":
                     return False
-            except:
-                raise ValueError(f"Значение {value} должно быть true или false")
+            except Exception as e:
+                raise ValueError(
+                    f"Значение {value} должно быть true или false"
+                ) from e
         case _:
             raise ValueError(f"Неподдерживаемый тип {column_type}")

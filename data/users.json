@@ -12,5 +12,19 @@
     "email": "dobry@mail.ru",
     "age": 42,
     "active": true
+  },
+  {
+    "ID": 3,
+    "name": "Тест",
+    "email": "test@mail.ru",
+    "age": 99,
+    "active": true
+  },
+  {
+    "ID": 4,
+    "name": "Декоратор",
+    "email": "decorator@mail.ru",
+    "age": 77,
+    "active": true
   }
 ]
